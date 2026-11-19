@@ -4,21 +4,40 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Conway's Game of Life — 70×70 Interactive Simulation</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <style>
-    /* Custom styles for crisp canvas rendering, animations, and custom range slider */
+    /* Self-contained reset and utility styles for 100% offline execution (no CDNs) */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background-color: #090d16;
       color: #f8fafc;
       overflow: hidden;
       touch-action: none;
       user-select: none;
+      -webkit-user-select: none;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
     }
 
     .font-mono-code {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    /* Layout & Canvas Container */
+    #canvas-container {
+      position: relative;
+      flex: 1 1 0%;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
     }
 
     canvas {
@@ -64,9 +83,26 @@
       background-color: #34d399;
     }
 
+    input[type="range"]::-moz-range-track {
+      background: #1e293b;
+      height: 6px;
+      border-radius: 999px;
+      border: 1px solid #334155;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      background-color: #10b981;
+      height: 16px;
+      width: 16px;
+      border: none;
+      border-radius: 50%;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+      transition: transform 0.15s ease, background-color 0.15s ease;
+    }
+
     /* Glassmorphism panels */
     .glass-panel {
-      background: rgba(15, 23, 42, 0.82);
+      background: rgba(15, 23, 42, 0.85);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border: 1px solid rgba(51, 65, 85, 0.65);
@@ -74,57 +110,471 @@
     }
 
     /* Subtle button press and glow transitions */
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      border: none;
+      outline: none;
+    }
+
     .btn-control {
       transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .btn-control:active {
       transform: scale(0.95);
     }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
+
+    /* Top Header */
+    .top-header {
+      position: fixed;
+      top: 0.75rem;
+      left: 0.75rem;
+      right: 0.75rem;
+      z-index: 20;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      pointer-events: none;
+    }
+
+    .brand-card {
+      border-radius: 1rem;
+      padding: 0.625rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      pointer-events: auto;
+    }
+
+    .status-dot {
+      width: 0.75rem;
+      height: 0.75rem;
+      border-radius: 9999px;
+      background-color: #34d399;
+      box-shadow: 0 0 12px #34d399;
+      animation: pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      flex-shrink: 0;
+    }
+
+    .brand-title {
+      font-size: 0.875rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      color: #f1f5f9;
+      line-height: 1.25;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    .telemetry-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+      pointer-events: auto;
+    }
+
+    .telemetry-card {
+      border-radius: 1rem;
+      padding: 0.5rem 0.875rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      font-size: 0.75rem;
+    }
+
+    .stat-col {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .stat-val-emerald {
+      font-weight: 700;
+      color: #34d399;
+      font-size: 0.875rem;
+    }
+
+    .stat-val-sky {
+      font-weight: 700;
+      color: #38bdf8;
+      font-size: 0.875rem;
+    }
+
+    .stat-val-slate {
+      font-weight: 600;
+      color: #e2e8f0;
+      font-size: 0.875rem;
+    }
+
+    .divider-v {
+      height: 1.5rem;
+      width: 1px;
+      background-color: #334155;
+    }
+
+    .zoom-stat-wrapper,
+    .zoom-divider {
+      display: none;
+    }
+
+    .preset-card {
+      border-radius: 1rem;
+      padding: 0.5rem 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .preset-label {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      font-weight: 500;
+      display: none;
+    }
+
+    .preset-select {
+      font-family: inherit;
+      background-color: rgba(30, 41, 59, 0.9);
+      color: #e2e8f0;
+      font-size: 0.75rem;
+      border-radius: 0.75rem;
+      padding: 0.375rem 0.625rem;
+      border: 1px solid #334155;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .preset-select:focus {
+      border-color: #10b981;
+    }
+
+    /* Right Floating Camera Controls */
+    .side-controls {
+      position: fixed;
+      right: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      border-radius: 1rem;
+    }
+
+    .icon-btn {
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 0.75rem;
+      background-color: rgba(30, 41, 59, 0.9);
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(51, 65, 85, 0.8);
+    }
+
+    .icon-btn:hover {
+      background-color: #334155;
+    }
+
+    .icon-btn.pan-active {
+      background-color: #059669;
+      color: #ffffff;
+      border-color: #34d399;
+    }
+
+    .icon-btn.pan-active:hover {
+      background-color: #10b981;
+    }
+
+    .divider-h {
+      width: 100%;
+      height: 1px;
+      background-color: rgba(51, 65, 85, 0.8);
+      margin: 0.125rem 0;
+    }
+
+    /* Bottom Control Dock */
+    .bottom-dock {
+      position: fixed;
+      bottom: 0.75rem;
+      left: 0.75rem;
+      right: 0.75rem;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .dock-panel {
+      border-radius: 1rem;
+      padding: 0.625rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      max-width: 56rem;
+      width: 100%;
+      pointer-events: auto;
+    }
+
+    .btn-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .action-btn {
+      padding: 0.625rem 0.875rem;
+      border-radius: 0.75rem;
+      font-size: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    .btn-play {
+      padding-left: 1rem;
+      padding-right: 1rem;
+      background-color: #059669;
+      color: #ffffff;
+      font-weight: 600;
+      gap: 0.5rem;
+      box-shadow: 0 10px 15px -3px rgba(2, 44, 34, 0.5);
+    }
+
+    .btn-play:hover {
+      background-color: #10b981;
+    }
+
+    .btn-play.is-playing {
+      background-color: #d97706;
+    }
+
+    .btn-play.is-playing:hover {
+      background-color: #f59e0b;
+    }
+
+    .btn-step {
+      background-color: #1e293b;
+      color: #f1f5f9;
+      font-weight: 500;
+      border: 1px solid #334155;
+    }
+
+    .btn-step:hover {
+      background-color: #334155;
+    }
+
+    .btn-random {
+      background-color: rgba(79, 70, 229, 0.9);
+      color: #ffffff;
+      font-weight: 500;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    }
+
+    .btn-random:hover {
+      background-color: #6366f1;
+    }
+
+    .btn-clear {
+      background-color: rgba(225, 29, 72, 0.2);
+      color: #fda4af;
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      font-weight: 500;
+    }
+
+    .btn-clear:hover {
+      background-color: rgba(225, 29, 72, 0.35);
+    }
+
+    .dock-divider-sm,
+    .dock-divider-md {
+      height: 1.5rem;
+      width: 1px;
+      background-color: rgba(51, 65, 85, 0.8);
+      display: none;
+    }
+
+    /* Speed Control Box */
+    .speed-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      background-color: rgba(15, 23, 42, 0.7);
+      padding: 0.375rem 0.875rem;
+      border-radius: 0.75rem;
+      border: 1px solid #1e293b;
+      width: 100%;
+    }
+
+    .speed-label-group {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    .speed-label {
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: #cbd5e1;
+    }
+
+    .speed-slider {
+      width: 7rem;
+    }
+
+    .speed-val {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #34d399;
+      width: 4.25rem;
+      text-align: right;
+    }
+
+    .helper-hint {
+      margin-top: 0.375rem;
+      font-size: 11px;
+      color: rgba(148, 163, 184, 0.9);
+      background-color: rgba(2, 6, 23, 0.75);
+      padding: 0.125rem 0.75rem;
+      border-radius: 9999px;
+      backdrop-filter: blur(4px);
+      display: none;
+    }
+
+    /* Toast Notification */
+    .toast-box {
+      position: fixed;
+      top: 5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: #6ee7b7;
+      border-color: rgba(16, 185, 129, 0.4);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .toast-box.visible {
+      opacity: 1;
+    }
+
+    /* SVG Icons */
+    .icon-sm {
+      width: 1rem;
+      height: 1rem;
+      flex-shrink: 0;
+    }
+
+    .icon-md {
+      width: 1.25rem;
+      height: 1.25rem;
+      flex-shrink: 0;
+    }
+
+    .text-sky { color: #38bdf8; }
+    .text-amber { color: #fbbf24; }
+    .hidden { display: none !important; }
+
+    /* Responsive Breakpoints */
+    @media (min-width: 640px) {
+      .brand-title { font-size: 1rem; }
+      .telemetry-card { font-size: 0.875rem; }
+      .stat-val-emerald, .stat-val-sky { font-size: 1rem; }
+      .zoom-stat-wrapper { display: flex; }
+      .zoom-divider { display: block; }
+      .preset-select { font-size: 0.875rem; }
+      .dock-panel {
+        padding: 0.75rem 1.25rem;
+        gap: 1rem;
+      }
+      .action-btn { font-size: 0.875rem; }
+      .dock-divider-sm { display: block; }
+      .speed-box {
+        width: auto;
+        justify-content: flex-start;
+      }
+      .speed-slider { width: 8rem; }
+      .helper-hint { display: block; }
+    }
+
+    @media (min-width: 768px) {
+      .preset-label { display: inline; }
+      .dock-divider-md { display: block; }
+    }
   </style>
 </head>
-<body class="relative w-screen h-screen flex flex-col">
+<body>
 
   <!-- Full-Viewport Interactive Simulation Canvas -->
-  <div id="canvas-container" class="relative flex-1 w-full h-full overflow-hidden">
+  <div id="canvas-container">
     <canvas id="lifeCanvas"></canvas>
   </div>
 
   <!-- Top Header & Live Telemetry Bar -->
-  <header class="fixed top-3 left-3 right-3 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+  <header class="top-header">
     <!-- Title & Rules Badge -->
-    <div class="glass-panel rounded-2xl px-4 py-2.5 flex items-center gap-3 pointer-events-auto">
-      <div class="w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399] animate-pulse"></div>
+    <div class="glass-panel brand-card">
+      <div class="status-dot"></div>
       <div>
-        <h1 class="text-sm sm:text-base font-bold tracking-tight text-slate-100 leading-tight">
+        <h1 class="brand-title">
           Conway’s Game of Life
         </h1>
-        <p class="text-[11px] text-slate-400 font-mono-code">70 × 70 Bounded Grid · B3/S23</p>
+        <p class="brand-subtitle font-mono-code">70 × 70 Bounded Grid · B3/S23</p>
       </div>
     </div>
 
     <!-- Telemetry Counters & Presets -->
-    <div class="flex flex-wrap items-center gap-2 pointer-events-auto">
-      <div class="glass-panel rounded-2xl px-3.5 py-2 flex items-center gap-4 text-xs sm:text-sm">
-        <div class="flex flex-col">
-          <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Generation</span>
-          <span id="genCount" class="font-mono-code font-bold text-emerald-400 text-sm sm:text-base">0</span>
+    <div class="telemetry-group">
+      <div class="glass-panel telemetry-card">
+        <div class="stat-col">
+          <span class="stat-label">Generation</span>
+          <span id="genCount" class="font-mono-code stat-val-emerald">0</span>
         </div>
-        <div class="h-6 w-[1px] bg-slate-700"></div>
-        <div class="flex flex-col">
-          <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Alive</span>
-          <span id="aliveCount" class="font-mono-code font-bold text-sky-400 text-sm sm:text-base">0</span>
+        <div class="divider-v"></div>
+        <div class="stat-col">
+          <span class="stat-label">Alive</span>
+          <span id="aliveCount" class="font-mono-code stat-val-sky">0</span>
         </div>
-        <div class="h-6 w-[1px] bg-slate-700 hidden sm:block"></div>
-        <div class="hidden sm:flex flex-col">
-          <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Zoom</span>
-          <span id="zoomDisplay" class="font-mono-code font-semibold text-slate-200 text-sm">100%</span>
+        <div class="divider-v zoom-divider"></div>
+        <div class="stat-col zoom-stat-wrapper">
+          <span class="stat-label">Zoom</span>
+          <span id="zoomDisplay" class="font-mono-code stat-val-slate">100%</span>
         </div>
       </div>
 
       <!-- Pattern Presets Dropdown -->
-      <div class="glass-panel rounded-2xl px-3 py-2 flex items-center gap-2">
-        <label for="presetSelect" class="text-xs text-slate-400 hidden md:inline font-medium">Seed:</label>
-        <select id="presetSelect" class="bg-slate-800/90 text-slate-200 text-xs sm:text-sm rounded-xl px-2.5 py-1.5 border border-slate-700 focus:outline-none focus:border-emerald-500 cursor-pointer">
+      <div class="glass-panel preset-card">
+        <label for="presetSelect" class="preset-label">Seed:</label>
+        <select id="presetSelect" class="preset-select">
           <option value="gosper">Gosper Glider Gun</option>
           <option value="pulsar">Pulsar Oscillator</option>
           <option value="rpentomino">R-Pentomino</option>
@@ -137,101 +587,101 @@
   </header>
 
   <!-- Floating Zoom & Navigation Controls (Right Side) -->
-  <div class="fixed right-3 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-2 glass-panel p-2 rounded-2xl">
-    <button id="zoomInBtn" title="Zoom In (+)" class="btn-control w-10 h-10 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700/80">
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+  <div class="glass-panel side-controls">
+    <button id="zoomInBtn" title="Zoom In (+)" class="btn-control icon-btn">
+      <svg class="icon-md" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
       </svg>
     </button>
-    <button id="zoomOutBtn" title="Zoom Out (-)" class="btn-control w-10 h-10 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700/80">
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <button id="zoomOutBtn" title="Zoom Out (-)" class="btn-control icon-btn">
+      <svg class="icon-md" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4" />
       </svg>
     </button>
-    <div class="w-full h-[1px] bg-slate-700/80 my-0.5"></div>
-    <button id="resetViewBtn" title="Center & Fit Grid (R)" class="btn-control w-10 h-10 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700/80">
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <div class="divider-h"></div>
+    <button id="resetViewBtn" title="Center & Fit Grid (R)" class="btn-control icon-btn">
+      <svg class="icon-md" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
       </svg>
     </button>
-    <button id="panModeBtn" title="Toggle Pan Mode (or Right-Drag / Space+Drag)" class="btn-control w-10 h-10 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 flex items-center justify-center border border-slate-700/80">
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <button id="panModeBtn" title="Toggle Pan Mode (or Right-Drag / Space+Drag)" class="btn-control icon-btn">
+      <svg class="icon-md" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
       </svg>
     </button>
   </div>
 
   <!-- Bottom Control Dock -->
-  <footer class="fixed bottom-3 left-3 right-3 z-20 flex flex-col items-center pointer-events-none">
-    <div class="glass-panel rounded-2xl p-2.5 sm:px-5 sm:py-3 flex flex-wrap items-center justify-center gap-2 sm:gap-4 max-w-4xl w-full pointer-events-auto">
+  <footer class="bottom-dock">
+    <div class="glass-panel dock-panel">
       
       <!-- Primary Simulation Buttons -->
-      <div class="flex items-center gap-2">
+      <div class="btn-group">
         <!-- Auto-Play / Pause Button -->
-        <button id="playPauseBtn" class="btn-control px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-950/50">
-          <svg id="playIcon" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+        <button id="playPauseBtn" class="btn-control action-btn btn-play">
+          <svg id="playIcon" class="icon-sm" fill="currentColor" viewBox="0 0 24 24">
             <path d="M8 5v14l11-7z" />
           </svg>
-          <svg id="pauseIcon" class="w-4 h-4 hidden" fill="currentColor" viewBox="0 0 24 24">
+          <svg id="pauseIcon" class="icon-sm hidden" fill="currentColor" viewBox="0 0 24 24">
             <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
           </svg>
           <span id="playPauseText">Auto-Play</span>
         </button>
 
         <!-- Step Single Generation Button -->
-        <button id="stepBtn" class="btn-control px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-medium text-xs sm:text-sm flex items-center gap-1.5 border border-slate-700">
-          <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <button id="stepBtn" class="btn-control action-btn btn-step">
+          <svg class="icon-sm text-sky" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
           </svg>
           <span>Step</span>
         </button>
       </div>
 
-      <div class="h-6 w-[1px] bg-slate-700/80 hidden sm:block"></div>
+      <div class="dock-divider-sm"></div>
 
       <!-- Board Manipulation Buttons -->
-      <div class="flex items-center gap-2">
+      <div class="btn-group">
         <!-- Randomize Grid Button -->
-        <button id="randomBtn" class="btn-control px-3.5 py-2.5 rounded-xl bg-indigo-600/90 hover:bg-indigo-500 text-white font-medium text-xs sm:text-sm flex items-center gap-1.5 shadow-md">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <button id="randomBtn" class="btn-control action-btn btn-random">
+          <svg class="icon-sm" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
           <span>Randomize</span>
         </button>
 
         <!-- Clear Grid Button -->
-        <button id="clearBtn" class="btn-control px-3.5 py-2.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/35 text-rose-300 border border-rose-500/30 font-medium text-xs sm:text-sm flex items-center gap-1.5">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <button id="clearBtn" class="btn-control action-btn btn-clear">
+          <svg class="icon-sm" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
           <span>Clear</span>
         </button>
       </div>
 
-      <div class="h-6 w-[1px] bg-slate-700/80 hidden md:block"></div>
+      <div class="dock-divider-md"></div>
 
       <!-- Simulation Speed Control -->
-      <div class="flex items-center gap-3 bg-slate-900/70 px-3.5 py-1.5 rounded-xl border border-slate-800 w-full sm:w-auto justify-between sm:justify-start">
-        <div class="flex items-center gap-1.5">
-          <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <div class="speed-box">
+        <div class="speed-label-group">
+          <svg class="icon-sm text-amber" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
-          <span class="text-xs font-medium text-slate-300">Speed:</span>
+          <span class="speed-label">Speed:</span>
         </div>
-        <input id="speedSlider" type="range" min="1" max="60" value="12" class="w-28 sm:w-32" />
-        <span id="speedValue" class="font-mono-code text-xs font-semibold text-emerald-400 w-16 text-right">12 gen/s</span>
+        <input id="speedSlider" type="range" min="1" max="60" value="12" class="speed-slider" />
+        <span id="speedValue" class="font-mono-code speed-val">12 gen/s</span>
       </div>
 
     </div>
 
     <!-- Subtle Helper Hint -->
-    <div class="mt-1.5 text-[11px] text-slate-400/90 bg-slate-950/75 px-3 py-0.5 rounded-full backdrop-blur-sm hidden sm:block">
+    <div class="helper-hint">
       Click or drag to toggle tiles · Scroll or pinch to zoom · Right-drag, middle-drag, or toggle Hand tool to pan
     </div>
   </footer>
 
   <!-- Toast Notification Box (Replaces any alert() calls) -->
-  <div id="toastBox" class="fixed top-20 left-1/2 -translate-x-1/2 z-30 glass-panel px-4 py-2 rounded-full text-xs font-medium text-emerald-300 border-emerald-500/40 opacity-0 pointer-events-none transition-opacity duration-300">
+  <div id="toastBox" class="glass-panel toast-box">
     Notification
   </div>
 
@@ -318,10 +768,10 @@
       let toastTimeout = null;
       function showToast(message) {
         toastBox.textContent = message;
-        toastBox.classList.remove('opacity-0');
+        toastBox.classList.add('visible');
         clearTimeout(toastTimeout);
         toastTimeout = setTimeout(() => {
-          toastBox.classList.add('opacity-0');
+          toastBox.classList.remove('visible');
         }, 2000);
       }
 
@@ -662,14 +1112,12 @@
         isPlaying = state;
         if (isPlaying) {
           lastStepTimestamp = performance.now();
-          playPauseBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500');
-          playPauseBtn.classList.add('bg-amber-600', 'hover:bg-amber-500');
+          playPauseBtn.classList.add('is-playing');
           playPauseText.textContent = 'Pause';
           playIcon.classList.add('hidden');
           pauseIcon.classList.remove('hidden');
         } else {
-          playPauseBtn.classList.remove('bg-amber-600', 'hover:bg-amber-500');
-          playPauseBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+          playPauseBtn.classList.remove('is-playing');
           playPauseText.textContent = 'Auto-Play';
           playIcon.classList.remove('hidden');
           pauseIcon.classList.add('hidden');
@@ -679,13 +1127,11 @@
       function togglePanMode() {
         isPanModeForced = !isPanModeForced;
         if (isPanModeForced) {
-          panModeBtn.classList.add('bg-emerald-600', 'text-white', 'border-emerald-400');
-          panModeBtn.classList.remove('bg-slate-800/90', 'text-slate-300');
+          panModeBtn.classList.add('pan-active');
           canvas.style.cursor = 'grab';
           showToast('Pan Tool Active — Drag anywhere to move view');
         } else {
-          panModeBtn.classList.remove('bg-emerald-600', 'text-white', 'border-emerald-400');
-          panModeBtn.classList.add('bg-slate-800/90', 'text-slate-300');
+          panModeBtn.classList.remove('pan-active');
           canvas.style.cursor = 'crosshair';
           showToast('Draw Tool Active — Click or drag tiles to toggle');
         }
